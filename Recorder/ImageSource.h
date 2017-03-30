@@ -12,7 +12,7 @@ public:
 	virtual ~ImageSource();
 
 public:
-	virtual void grabImage(cv::Mat& image, std::string& grappedFileName) = 0;
+	virtual void processNextImage(cv::Mat& image, std::string& grappedFileName) = 0;
 
 public:
 	int getFrameRate() const;

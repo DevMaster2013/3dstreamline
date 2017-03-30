@@ -17,7 +17,8 @@ public:
 	~ImageFolderSource();
 
 public:
-	virtual void grabImage(cv::Mat& image, std::string& grappedFileName) override;
+	virtual void processNextImage(cv::Mat& image, std::string& grappedFileName) override;
+	virtual void setOutputFolder(const std::string& outFolder) override;
 
 private:
 	void populateFolderImages();

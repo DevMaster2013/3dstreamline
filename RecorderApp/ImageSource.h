@@ -11,13 +11,20 @@ protected:
 	bool _endOfStream;
 	int _sourceType;
 
+	cv::Mat _cameraMatrix;
+	cv::Mat _cameraDistortParameters;
+
 public:
 	ImageSource(int sourceType);
 	ImageSource(int sourceType, const std::string& inputName, int frameRate);
 	virtual ~ImageSource();
 
 public:
-	virtual void grabImage(cv::Mat& image, std::string& grappedFileName) = 0;
+	virtual void processNextImage(cv::Mat& image, std::string& grappedFileName) = 0;
+
+protected:
+	cv::Mat undistortImage(const cv::Mat& image);
+	void parseCalibrationFile();
 
 public:
 	static ImageSource* createImageSource(int sourceType);
@@ -33,6 +40,6 @@ public:
 	const std::string& getCalibrationFile();
 	void setCalibrationFile(const std::string& calibFile);
 	const std::string& getOutputFolder();
-	void setOutputFolder(const std::string& outFolder);
+	virtual void setOutputFolder(const std::string& outFolder);
 	bool isEndOfStream() const;
 };

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <thread>
 #include "..\ReconstructionUtilities\ProgramArgumentParser.h"
 #include "..\ReconstructionUtilities\Server.h"
 #include "..\ReconstructionUtilities\Client.h"
@@ -13,7 +14,7 @@ class ClientObserver : public util::ICommunicatorObserver
 		dataStr[dataLength] = 0;
 		std::cout << "Incomming data --> " << "Length : " << dataLength << " - Data : " << dataStr << "\n";
 	}
-	virtual void onClinetConnected(const char * clientName) override
+	virtual void onClinetConnected() override
 	{
 	}
 };
@@ -25,6 +26,23 @@ void showUsage()
 	std::cout << "Undistorter --output_folder=\"D:\\Images\"\n";
 	std::cout << "Options:\n";
 	std::cout << "--output_folder : the folder where the undistorted images will be there\n";
+}
+
+void doThread()
+{
+	util::Client client;
+	client.addObserver(new ClientObserver());
+	client.initialize();
+	client.connect("127.0.0.1", "4000");
+
+	Sleep(1000);
+	unsigned char data[] = { 254, 0, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 12, 255 };
+	client.send(data, sizeof(data));
+
+	while (true)
+	{
+		Sleep(1);
+	}
 }
 
 int main(int argc, char* argv[])
@@ -45,13 +63,10 @@ int main(int argc, char* argv[])
 	//std::string output_folder = argments.getArgument<std::string>("output_folder");
 
 	// Start the listener 
-	util::Client client;
-	client.addObserver(new ClientObserver());
-	client.initialize();
-	client.connect("127.0.0.1", "4000");
+	
 
-	Sleep(10000);	
-	Sleep(10000000);
+	std::thread th = std::thread(doThread);
+	th.join();
 
 	return 0;
 }

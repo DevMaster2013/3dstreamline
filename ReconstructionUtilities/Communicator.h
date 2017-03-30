@@ -12,17 +12,16 @@
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #include <stdio.h>
+#include <vector>
 
 #pragma comment(lib, "Ws2_32.lib")
 #define DEFAULT_BUFLEN 4096
-
-#include <vector>
 
 namespace util
 {
 	class RECONUTIL_API Communicator
 	{
-	protected:
+	protected:			
 		SOCKET _innerSocket;
 		bool _isClosed;
 		bool _isConnected;
@@ -34,14 +33,19 @@ namespace util
 
 	public:
 		virtual bool initialize();
-		virtual bool connect(const char* ip, const char* port) = 0;		
+		virtual bool connect(const char* ip, const char* port);		
 		virtual void finalize();	
+		virtual void send(void* data, size_t dataLength);
+
+	protected:
+		virtual bool onConnect(struct addrinfo *result) = 0;
+		virtual void notifyDataRecieved(void * data, size_t dataLength);
 
 	public:
 		bool isConnected() const;
 
 	public:
 		void addObserver(ICommunicatorObserver* observer);
-		void removeObserver(ICommunicatorObserver* observer);
+		void removeObserver(ICommunicatorObserver* observer);	
 	};
 }

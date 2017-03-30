@@ -13,6 +13,7 @@ CRecorderDlg::CRecorderDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(IDD_RECORDERAPP_DIALOG, pParent)
 	, _addedSources()
 	, _server(new util::Server())
+	, _processingThread(INVALID_HANDLE_VALUE)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -40,14 +41,24 @@ BEGIN_MESSAGE_MAP(CRecorderDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CONNECT, &CRecorderDlg::OnBnClickedButtonConnect)
 	ON_BN_CLICKED(IDC_BUTTON_DISCONNECT, &CRecorderDlg::OnBnClickedButtonDisconnect)
 	ON_WM_CLOSE()
+	ON_BN_CLICKED(IDC_BUTTON_START, &CRecorderDlg::OnBnClickedButtonStart)
+	ON_BN_CLICKED(IDC_BUTTON_STOP, &CRecorderDlg::OnBnClickedButtonStop)
 END_MESSAGE_MAP()
 
 BOOL CRecorderDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
+	_isActive = true;
 
 	SetIcon(m_hIcon, TRUE);	
 	SetIcon(m_hIcon, FALSE);
+
+	GetDlgItem(IDC_BUTTON_DISCONNECT)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_UPDATE_SOURCE)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_DELETE_SOURCE)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_CLEAR_SOURCES)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_STOP)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(FALSE);
 
 	fillImageSourceTypes();
 
@@ -108,8 +119,8 @@ void CRecorderDlg::addNewSource(int insertIndex)
 	ImageSource* addedSource = ImageSource::createImageSource(sourceType);
 	addedSource->setCalibrationFile(calibFile.GetBuffer());
 	addedSource->setFrameRate(frameRate);
-	addedSource->setOutputFolder(outputFolder.GetBuffer());
 	addedSource->setInputName(inputFolder.GetBuffer());
+	addedSource->setOutputFolder(outputFolder.GetBuffer());	
 	_addedSources.push_back(addedSource);
 
 	CString addedString = ImageSource::getImageSourceName(sourceType) + CString(" : ") + inputFolder;
@@ -126,6 +137,11 @@ void CRecorderDlg::addNewSource(int insertIndex)
 		_lstAddedSources.SetItemDataPtr(insertIndex, addedSource);
 		addLogMessage("New source added");
 	}	
+
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_UPDATE_SOURCE)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_DELETE_SOURCE)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_CLEAR_SOURCES)->EnableWindow(_addedSources.size() > 0);
 }
 
 void CRecorderDlg::deleteSelectedSource()
@@ -144,6 +160,11 @@ void CRecorderDlg::deleteSelectedSource()
 		_lstAddedSources.DeleteString(curSel);
 		addLogMessage("Source deleted");
 	}
+
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_UPDATE_SOURCE)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_DELETE_SOURCE)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_CLEAR_SOURCES)->EnableWindow(_addedSources.size() > 0);
 }
 
 void CRecorderDlg::updateSelectedSource()
@@ -163,6 +184,10 @@ void CRecorderDlg::clearAllSources()
 	_addedSources.clear();
 	_lstAddedSources.ResetContent();
 	addLogMessage("All sources deleted");
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_UPDATE_SOURCE)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_DELETE_SOURCE)->EnableWindow(_addedSources.size() > 0);
+	GetDlgItem(IDC_BUTTON_CLEAR_SOURCES)->EnableWindow(_addedSources.size() > 0);
 }
 
 void CRecorderDlg::showSourceInfo(int index)
@@ -191,6 +216,9 @@ void CRecorderDlg::serverConnect()
 		{
 			_server->addObserver(this);
 			addLogMessage("Server connected");
+
+			GetDlgItem(IDC_BUTTON_DISCONNECT)->EnableWindow(TRUE);
+			GetDlgItem(IDC_BUTTON_CONNECT)->EnableWindow(FALSE);
 		}
 	}
 }
@@ -201,15 +229,31 @@ void CRecorderDlg::serverDisconnect()
 	{
 		_server->finalize();
 		addLogMessage("Server disconnected");
+
+		GetDlgItem(IDC_BUTTON_CONNECT)->EnableWindow(TRUE);
+		GetDlgItem(IDC_BUTTON_DISCONNECT)->EnableWindow(FALSE);
 	}
 }
 
 void CRecorderDlg::start()
 {
+	_processingThread = CreateThread(nullptr, 0, processingThread, this, CREATE_ALWAYS, 0);
+
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_STOP)->EnableWindow(TRUE);
 }
 
 void CRecorderDlg::stop()
 {
+	if (_processingThread != INVALID_HANDLE_VALUE)
+	{
+		_isActive = false;
+		WaitForSingleObject(_processingThread, 1000);
+		_processingThread = INVALID_HANDLE_VALUE;
+
+		GetDlgItem(IDC_BUTTON_START)->EnableWindow(TRUE);
+		GetDlgItem(IDC_BUTTON_STOP)->EnableWindow(FALSE);
+	}
 }
 
 void CRecorderDlg::addLogMessage(const std::string & logMessage)
@@ -221,6 +265,36 @@ void CRecorderDlg::addLogMessage(const std::string & logMessage)
 
 	CString message = time + " : " + logMessage.c_str();
 	_lstLogMessages.AddString(message);
+}
+
+void CRecorderDlg::startAllSources()
+{
+	bool stillThereAreData = false;
+	do
+	{
+		stillThereAreData = false;
+		for each (auto& source in _addedSources)
+		{
+			if (!_isActive)
+				break;
+
+			if (!source->isEndOfStream())
+			{
+				stillThereAreData = true;
+
+				cv::Mat image;
+				std::string imageName;
+				source->processNextImage(image, imageName);
+
+				// Log the processed image
+				addLogMessage(imageName + " processed");
+
+				// Send the image name to the clients
+				_server->send((void*)(imageName.c_str()), imageName.length());
+			}
+		}
+
+	} while (_isActive && stillThereAreData);	
 }
 
 void CRecorderDlg::OnCbnSelchangeComboImageSourceType()
@@ -300,9 +374,9 @@ void CRecorderDlg::onDataRecieved(void * data, size_t dataLength)
 	addLogMessage("Data with length (" + std::to_string(dataLength) + ") recieved");
 }
 
-void CRecorderDlg::onClinetConnected(const char * clientName)
+void CRecorderDlg::onClinetConnected()
 {
-	addLogMessage("Client (" + std::string(clientName) + ") connect");
+	addLogMessage("Client connected");
 }
 
 void CRecorderDlg::OnBnClickedButtonConnect()
@@ -317,9 +391,29 @@ void CRecorderDlg::OnBnClickedButtonDisconnect()
 
 void CRecorderDlg::OnClose()
 {
+	stop();
+
 	clearAllSources();
 	serverDisconnect();
 	if (_server != nullptr)
 		delete _server;
 	__super::OnClose();
+}
+
+DWORD CRecorderDlg::processingThread(LPVOID parameter)
+{
+	CRecorderDlg* dlg = (CRecorderDlg*)parameter;
+	dlg->startAllSources();
+	return 0;
+}
+
+void CRecorderDlg::OnBnClickedButtonStart()
+{
+	start();
+}
+
+
+void CRecorderDlg::OnBnClickedButtonStop()
+{
+	stop();
 }

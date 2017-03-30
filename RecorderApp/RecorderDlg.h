@@ -31,8 +31,10 @@ private:
 	CListBox _lstAddedSources;
 
 private:
+	bool _isActive;
 	std::vector<ImageSource*> _addedSources;
 	util::Server* _server;
+	HANDLE _processingThread;
 
 private:
 	void fillImageSourceTypes();
@@ -46,6 +48,7 @@ private:
 	void start();
 	void stop();
 	void addLogMessage(const std::string& logMessage);
+	void startAllSources();
 
 public:
 	afx_msg void OnCbnSelchangeComboImageSourceType();
@@ -60,9 +63,16 @@ public:
 
 private:
 	virtual void onDataRecieved(void * data, size_t dataLength) override;
-	virtual void onClinetConnected(const char * clientName) override;
+	virtual void onClinetConnected() override;
+
 public:
 	afx_msg void OnBnClickedButtonConnect();
 	afx_msg void OnBnClickedButtonDisconnect();
 	afx_msg void OnClose();
+
+private:
+	static DWORD WINAPI processingThread(LPVOID parameter);
+public:
+	afx_msg void OnBnClickedButtonStart();
+	afx_msg void OnBnClickedButtonStop();
 };

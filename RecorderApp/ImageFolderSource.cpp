@@ -22,7 +22,7 @@ ImageFolderSource::~ImageFolderSource()
 	_folderImages.clear();
 }
 
-void ImageFolderSource::grabImage(cv::Mat& image, std::string& grappedFileName)
+void ImageFolderSource::processNextImage(cv::Mat& image, std::string& grappedFileName)
 {
 	if (_currentImageFrame >= _folderImages.size())
 	{
@@ -31,8 +31,26 @@ void ImageFolderSource::grabImage(cv::Mat& image, std::string& grappedFileName)
 
 	grappedFileName = _folderImages[_currentImageFrame];
 	const std::string& frameName = _inputName + "\\" + grappedFileName;
-	image = cv::imread(frameName);
+	cv::Mat originalImage = cv::imread(frameName);
 	_currentImageFrame += _frameRate;
+
+	// undistort the image using calibration file
+	image = undistortImage(originalImage);
+
+	// the jpeg compression parameters
+	std::vector<int> compressionParameters;
+	compressionParameters.push_back(CV_IMWRITE_JPEG_QUALITY);
+	compressionParameters.push_back(100);
+
+	// Save the image in the output folder
+	std::string fullPath = _outputFolder + "\\" + grappedFileName;
+	cv::imwrite(fullPath, image, compressionParameters);
+}
+
+void ImageFolderSource::setOutputFolder(const std::string & outFolder)
+{
+	ImageSource::setOutputFolder(outFolder);
+	populateFolderImages();
 }
 
 void ImageFolderSource::populateFolderImages()

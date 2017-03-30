@@ -5,14 +5,12 @@
 namespace util
 {
 
-#define MAX_CLIENTS 10
-
 	class RECONUTIL_API Server : public Communicator
 	{
 	private:
-		int _currentClientFreeSlot;
-		SOCKET _clientSockets[MAX_CLIENTS];
 		HANDLE _listenThread;
+		std::vector<SOCKET>* _connectedSockets;
+		std::vector<HANDLE>* _recievingHandles;
 
 	public:
 		Server();
@@ -20,19 +18,19 @@ namespace util
 
 	public:
 		virtual bool initialize() override;
-		virtual bool connect(const char* ip, const char* port) override;
 		virtual void finalize() override;
+		virtual void send(void* data, size_t dataLength) override;
+
+	protected:		
+		virtual bool onConnect(struct addrinfo *result) override;
+		virtual void listenImplementation();
+		virtual void recieveImplementation(SOCKET client);
 
 	private:
-		void notifyAllObservers(SOCKET clientSocke);
-
-	public:
-		void send(void* data, size_t dataLength);
-
-	private:
-		void listenToClients();
+		void notifyClientConnected(SOCKET clientSocke);
 
 	private:
 		static DWORD WINAPI listenThread(LPVOID parameter);
+		static DWORD WINAPI recieveThread(LPVOID parameter);
 	};
 }
